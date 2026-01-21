@@ -1,10 +1,11 @@
 /**
  * 阅读课反馈拆分工具 - 主页面
  * 
- * Design: 简洁清爽风格
+ * Design: 简洁清爽风格，移动端优先
  * - 上下布局：输入区在上，输出区在下
  * - 所有文本框固定5行高度，可滚动
  * - 输出文本框只读
+ * - 响应式设计：适配手机、iPad、桌面
  */
 
 import { useState } from "react";
@@ -38,40 +39,40 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header - 移动端优化 */}
       <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="container py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Scissors className="w-5 h-5 text-primary" />
+        <div className="container py-3 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground">阅读课反馈拆分工具</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-foreground">阅读课反馈拆分工具</h1>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container py-6 space-y-6">
+      {/* Main Content - 移动端优化间距 */}
+      <main className="container py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* 输入区 */}
         <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-medium flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
+          <CardHeader className="pb-2 sm:pb-3 px-4 sm:px-6">
+            <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary flex-shrink-0" />
               粘贴反馈文本
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
             <Textarea
               placeholder="在此粘贴老师的完整反馈文本..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="resize-none text-sm leading-relaxed"
-              style={{ height: '7.5rem' }} // 5行高度 (5 * 1.5rem line-height)
+              className="resize-none text-base sm:text-sm leading-relaxed w-full min-h-[8rem] sm:min-h-[7.5rem]"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:gap-3">
               <Button 
                 onClick={handleSplit} 
                 disabled={!inputText.trim()}
+                className="h-11 sm:h-10 px-4 sm:px-4 text-base sm:text-sm flex-1 sm:flex-none"
               >
                 <Scissors className="w-4 h-4 mr-2" />
                 开始拆分
@@ -80,6 +81,7 @@ export default function Home() {
                 variant="outline" 
                 onClick={handleClear}
                 disabled={!inputText && !results}
+                className="h-11 sm:h-10 px-4 sm:px-4 text-base sm:text-sm"
               >
                 清空
               </Button>
@@ -88,26 +90,25 @@ export default function Home() {
         </Card>
 
         {/* 输出区 */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {MODULE_CONFIG.map((module, index) => {
             const content = getModuleContent(module.key);
             return (
               <Card key={module.key} className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center">
+                <CardHeader className="pb-2 px-4 sm:px-6">
+                  <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
+                    <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary text-primary-foreground text-xs sm:text-sm font-semibold flex items-center justify-center flex-shrink-0">
                       {index + 1}
                     </span>
                     {module.label}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 sm:px-6">
                   <Textarea
                     value={content}
                     readOnly
                     placeholder="（等待拆分...）"
-                    className="resize-none text-sm leading-relaxed bg-muted/30"
-                    style={{ height: '7.5rem' }} // 5行高度
+                    className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full min-h-[8rem] sm:min-h-[7.5rem]"
                   />
                 </CardContent>
               </Card>
@@ -115,6 +116,9 @@ export default function Home() {
           })}
         </div>
       </main>
+
+      {/* 底部安全区域 - 适配 iPhone 刘海屏 */}
+      <div className="h-4 sm:h-6" />
     </div>
   );
 }
