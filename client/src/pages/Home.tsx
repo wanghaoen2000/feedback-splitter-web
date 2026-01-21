@@ -4,7 +4,8 @@
  * Design: 简洁清爽风格，移动端优先
  * - 上下布局：输入区在上，输出区在下
  * - 所有文本框固定5行高度，可滚动
- * - 输出文本框只读
+ * - 输出文本框只读，带复制按钮
+ * - 复制后按钮变勾，持久显示直到重新拆分或清空
  * - 响应式设计：适配手机、iPad、桌面
  */
 
@@ -13,11 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { extractModules, MODULE_CONFIG, type ExtractedModules } from "@/lib/extractModules";
-import { Scissors, FileText } from "lucide-react";
+import { Scissors, FileText, Copy, Check } from "lucide-react";
 
 export default function Home() {
   const [inputText, setInputText] = useState("");
   const [results, setResults] = useState<ExtractedModules | null>(null);
+  // 记录每个模块的复制状态
+  const [copiedModules, setCopiedModules] = useState<Record<string, boolean>>({});
 
   const handleSplit = () => {
     if (!inputText.trim()) {
@@ -25,11 +28,30 @@ export default function Home() {
     }
     const extracted = extractModules(inputText);
     setResults(extracted);
+    // 重置所有复制状态
+    setCopiedModules({});
   };
 
   const handleClear = () => {
     setInputText("");
     setResults(null);
+    // 重置所有复制状态
+    setCopiedModules({});
+  };
+
+  const handleCopy = async (key: string, content: string) => {
+    if (!content) return;
+    
+    try {
+      await navigator.clipboard.writeText(content);
+      // 标记该模块已复制
+      setCopiedModules(prev => ({
+        ...prev,
+        [key]: true
+      }));
+    } catch (err) {
+      console.error("复制失败:", err);
+    }
   };
 
   const getModuleContent = (key: string): string => {
@@ -93,15 +115,43 @@ export default function Home() {
         <div className="space-y-3 sm:space-y-4">
           {MODULE_CONFIG.map((module, index) => {
             const content = getModuleContent(module.key);
+            const isCopied = copiedModules[module.key] || false;
+            
             return (
               <Card key={module.key} className="shadow-sm">
                 <CardHeader className="pb-2 px-4 sm:px-6">
-                  <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
-                    <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary text-primary-foreground text-xs sm:text-sm font-semibold flex items-center justify-center flex-shrink-0">
-                      {index + 1}
-                    </span>
-                    {module.label}
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
+                      <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary text-primary-foreground text-xs sm:text-sm font-semibold flex items-center justify-center flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      {module.label}
+                    </CardTitle>
+                    {/* 复制按钮 */}
+                    <Button
+                      variant={isCopied ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleCopy(module.key, content)}
+                      disabled={!content}
+                      className={`h-9 sm:h-8 px-3 text-sm ${
+                        isCopied 
+                          ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                          : ""
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-1" />
+                          已复制
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-1" />
+                          复制
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="px-4 sm:px-6">
                   <Textarea
