@@ -66,7 +66,7 @@ export default function Home() {
               placeholder="在此粘贴老师的完整反馈文本..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="resize-none text-base sm:text-sm leading-relaxed w-full min-h-[8rem] sm:min-h-[7.5rem]"
+              className="resize-none text-base sm:text-sm leading-relaxed w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
             />
             <div className="flex gap-2 sm:gap-3">
               <Button 
@@ -108,7 +108,7 @@ export default function Home() {
                     value={content}
                     readOnly
                     placeholder="（等待拆分...）"
-                    className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full min-h-[8rem] sm:min-h-[7.5rem]"
+                    className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
                   />
                 </CardContent>
               </Card>
