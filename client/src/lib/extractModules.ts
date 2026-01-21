@@ -22,10 +22,39 @@ export const MODULE_CONFIG = [
 ] as const;
 
 /**
+ * 白名单：只有这些标记才被识别为真正的模块标记
+ * 其他如【30分钟】、【OK】等不会被识别
+ */
+const VALID_MODULE_TAGS = [
+  '授课内容',
+  '课堂笔记',
+  '随堂测试',
+  '作业批改',
+  '表现及建议',
+  '生词',
+  '长难句讲解',
+  '作业布置',
+  'OK',
+];
+
+/**
+ * 生成匹配有效模块标记的正则表达式
+ * 模块标记必须在行首（前面只有空白字符）
+ */
+function getValidModulePattern(): RegExp {
+  const escapedTags = VALID_MODULE_TAGS.map(tag => 
+    tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  // 匹配行首（或字符串开头）的有效模块标记
+  return new RegExp(`(?:^|\\n)\\s*【(${escapedTags.join('|')})】`, 'g');
+}
+
+/**
  * 提取单个模块的内容
  */
 function extractSingleModule(text: string, moduleName: string): string {
-  const startPattern = new RegExp(`【${moduleName}】\\s*`);
+  // 查找目标模块的起始位置
+  const startPattern = new RegExp(`(?:^|\\n)\\s*【${moduleName}】\\s*`);
   const startMatch = text.match(startPattern);
   
   if (!startMatch || startMatch.index === undefined) {
@@ -35,24 +64,39 @@ function extractSingleModule(text: string, moduleName: string): string {
   const contentStartIndex = startMatch.index + startMatch[0].length;
   const remainingText = text.substring(contentStartIndex);
 
-  let endPattern: RegExp;
+  // 构建结束模式
+  let endIndex = remainingText.length;
+
   if (moduleName === "作业布置") {
-    // 【作业布置】的特殊处理：结束于下一个【xxx】、"附当堂"开头的行、或连续的"-"分隔线
-    endPattern = /(?=【[^\]]+】)|(?=^附当堂)|(?=^-{3,})/m;
-  } else {
-    // 普通模块：结束于下一个【xxx】标记
-    endPattern = /(?=【[^\]]+】)/;
+    // 【作业布置】的特殊处理：
+    // 1. 结束于下一个有效模块标记
+    // 2. 或者"附当堂"开头的行
+    // 3. 或者连续的"-"分隔线
+    
+    // 检查分隔线
+    const separatorMatch = remainingText.match(/^-{3,}/m);
+    if (separatorMatch && separatorMatch.index !== undefined) {
+      endIndex = Math.min(endIndex, separatorMatch.index);
+    }
+    
+    // 检查"附当堂"
+    const attachMatch = remainingText.match(/^附当堂/m);
+    if (attachMatch && attachMatch.index !== undefined) {
+      endIndex = Math.min(endIndex, attachMatch.index);
+    }
   }
 
-  const endMatch = remainingText.match(endPattern);
-  
-  let moduleContent: string;
-  if (endMatch && endMatch.index !== undefined) {
-    moduleContent = remainingText.substring(0, endMatch.index);
-  } else {
-    moduleContent = remainingText;
+  // 查找下一个有效模块标记
+  const validModulePattern = getValidModulePattern();
+  let match;
+  while ((match = validModulePattern.exec(remainingText)) !== null) {
+    if (match.index < endIndex) {
+      endIndex = match.index;
+      break;
+    }
   }
 
+  const moduleContent = remainingText.substring(0, endIndex);
   return trimBlankLines(moduleContent);
 }
 
