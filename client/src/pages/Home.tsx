@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { extractModules, MODULE_CONFIG, type ExtractedModules } from "@/lib/extractModules";
-import { Scissors, FileText, Copy, Check, User, Users } from "lucide-react";
+import { extractClassModules, COMMON_MODULE_CONFIG, STUDENT_MODULE_CONFIG, type ClassModulesResult, type StudentData } from "@/lib/extractClassModules";
+import { Scissors, FileText, Copy, Check, User, Users, BookOpen, ClipboardList } from "lucide-react";
 
 type Mode = "oneToOne" | "smallClass";
 
@@ -27,9 +28,11 @@ interface OneToOneState {
   copiedModules: Record<string, boolean>;
 }
 
-// 小班课模式的状态（暂时简单）
+// 小班课模式的状态
 interface SmallClassState {
   inputText: string;
+  results: ClassModulesResult | null;
+  copiedModules: Record<string, boolean>; // 格式: "common_content", "student_0_homework" 等
 }
 
 export default function Home() {
@@ -45,7 +48,9 @@ export default function Home() {
   
   // 小班课模式状态
   const [smallClassState, setSmallClassState] = useState<SmallClassState>({
-    inputText: ""
+    inputText: "",
+    results: null,
+    copiedModules: {}
   });
 
   // 1对1模式的操作函数
@@ -89,6 +94,44 @@ export default function Home() {
   const getModuleContent = (key: string): string => {
     if (!oneToOneState.results) return "";
     return oneToOneState.results[key as keyof ExtractedModules] || "";
+  };
+
+  // 小班课模式的操作函数
+  const handleSmallClassSplit = () => {
+    if (!smallClassState.inputText.trim()) {
+      return;
+    }
+    const extracted = extractClassModules(smallClassState.inputText);
+    setSmallClassState(prev => ({
+      ...prev,
+      results: extracted,
+      copiedModules: {}
+    }));
+  };
+
+  const handleSmallClassClear = () => {
+    setSmallClassState({
+      inputText: "",
+      results: null,
+      copiedModules: {}
+    });
+  };
+
+  const handleSmallClassCopy = async (key: string, content: string) => {
+    if (!content) return;
+    
+    try {
+      await navigator.clipboard.writeText(content);
+      setSmallClassState(prev => ({
+        ...prev,
+        copiedModules: {
+          ...prev.copiedModules,
+          [key]: true
+        }
+      }));
+    } catch (err) {
+      console.error("复制失败:", err);
+    }
   };
 
   // 模式切换 Tab 组件
@@ -215,21 +258,218 @@ export default function Home() {
     </>
   );
 
-  // 小班课模式界面（占位）
-  const SmallClassView = () => (
-    <Card className="shadow-sm">
-      <CardContent className="py-12 sm:py-16 px-4 sm:px-6">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-            <Users className="w-8 h-8 text-muted-foreground" />
+  // 小班课模式界面
+  const SmallClassView = () => {
+    const results = smallClassState.results;
+    
+    return (
+      <>
+        {/* 输入区 */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2 sm:pb-3 px-4 sm:px-6">
+            <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary flex-shrink-0" />
+              粘贴小班课反馈文本
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
+            <Textarea
+              placeholder="在此粘贴小班课的完整反馈文本..."
+              value={smallClassState.inputText}
+              onChange={(e) => setSmallClassState(prev => ({ ...prev, inputText: e.target.value }))}
+              className="resize-none text-base sm:text-sm leading-relaxed w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
+            />
+            <div className="flex gap-2 sm:gap-3">
+              <Button 
+                onClick={handleSmallClassSplit} 
+                disabled={!smallClassState.inputText.trim()}
+                className="h-11 sm:h-10 px-4 sm:px-4 text-base sm:text-sm flex-1 sm:flex-none"
+              >
+                <Scissors className="w-4 h-4 mr-2" />
+                开始拆分
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleSmallClassClear}
+                disabled={!smallClassState.inputText && !smallClassState.results}
+                className="h-11 sm:h-10 px-4 sm:px-4 text-base sm:text-sm"
+              >
+                清空
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 全班共用部分 */}
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <BookOpen className="w-5 h-5 text-primary" />
+            <h2 className="text-base sm:text-lg font-semibold text-foreground">全班共用部分</h2>
           </div>
-          <div className="space-y-2">
-            <h3 className="text-lg font-medium text-foreground">小班课模式</h3>
-            <p className="text-muted-foreground text-sm">
-              小班课反馈拆分功能开发中...
-            </p>
-          </div>
+          
+          {COMMON_MODULE_CONFIG.map((module, index) => {
+            const content = results?.common[module.key as keyof typeof results.common] || "";
+            const copyKey = `common_${module.key}`;
+            const isCopied = smallClassState.copiedModules[copyKey] || false;
+            
+            return (
+              <Card key={module.key} className="shadow-sm">
+                <CardHeader className="pb-2 px-4 sm:px-6">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base sm:text-lg font-medium flex items-center gap-2">
+                      <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-primary text-primary-foreground text-xs sm:text-sm font-semibold flex items-center justify-center flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      {module.label}
+                    </CardTitle>
+                    <Button
+                      variant={isCopied ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSmallClassCopy(copyKey, content)}
+                      disabled={!content}
+                      className={`h-9 sm:h-8 px-3 text-sm ${
+                        isCopied 
+                          ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                          : ""
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-1" />
+                          已复制
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-1" />
+                          复制
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 sm:px-6">
+                  <Textarea
+                    value={content}
+                    readOnly
+                    placeholder="（等待拆分...）"
+                    className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
+                  />
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
+
+        {/* 学生单独部分 */}
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex items-center gap-2 px-1">
+            <ClipboardList className="w-5 h-5 text-primary" />
+            <h2 className="text-base sm:text-lg font-semibold text-foreground">
+              学生单独部分
+              {results && results.students.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  （共 {results.students.length} 名学生）
+                </span>
+              )}
+            </h2>
+          </div>
+          
+          {/* 学生列表 */}
+          {results && results.students.length > 0 ? (
+            results.students.map((student, studentIndex) => (
+              <StudentCard
+                key={studentIndex}
+                student={student}
+                studentIndex={studentIndex}
+                copiedModules={smallClassState.copiedModules}
+                onCopy={handleSmallClassCopy}
+              />
+            ))
+          ) : (
+            <Card className="shadow-sm">
+              <CardContent className="py-8 sm:py-12 px-4 sm:px-6">
+                <div className="text-center space-y-2">
+                  <Users className="w-10 h-10 mx-auto text-muted-foreground/50" />
+                  <p className="text-muted-foreground text-sm">
+                    {smallClassState.inputText.trim() 
+                      ? "未识别到学生信息，请检查反馈文本格式"
+                      : "等待拆分..."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  // 学生卡片组件
+  const StudentCard = ({ 
+    student, 
+    studentIndex, 
+    copiedModules, 
+    onCopy 
+  }: { 
+    student: StudentData; 
+    studentIndex: number; 
+    copiedModules: Record<string, boolean>;
+    onCopy: (key: string, content: string) => void;
+  }) => (
+    <Card className="shadow-sm border-l-4 border-l-primary/60">
+      <CardHeader className="pb-3 px-4 sm:px-6 bg-muted/20">
+        <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary text-primary-foreground text-sm sm:text-base font-bold flex items-center justify-center flex-shrink-0">
+            {studentIndex + 1}
+          </div>
+          <span>{student.name}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 px-4 sm:px-6 pt-4">
+        {STUDENT_MODULE_CONFIG.map((module) => {
+          const content = student[module.key as keyof Omit<StudentData, 'name'>] || "";
+          const copyKey = `student_${studentIndex}_${module.key}`;
+          const isCopied = copiedModules[copyKey] || false;
+          
+          return (
+            <div key={module.key} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm sm:text-base font-medium text-foreground">
+                  {module.label}
+                </h4>
+                <Button
+                  variant={isCopied ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onCopy(copyKey, content)}
+                  disabled={!content}
+                  className={`h-8 sm:h-7 px-2.5 text-xs sm:text-sm ${
+                    isCopied 
+                      ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                      : ""
+                  }`}
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 mr-1" />
+                      复制
+                    </>
+                  )}
+                </Button>
+              </div>
+              <Textarea
+                value={content}
+                readOnly
+                placeholder="（无内容）"
+                className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
+              />
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
