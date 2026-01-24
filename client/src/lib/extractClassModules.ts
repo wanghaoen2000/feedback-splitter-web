@@ -303,3 +303,126 @@ export function getStudentNames(text: string): string[] {
   const positions = findStudentNames(text);
   return positions.map(p => p.name);
 }
+
+/**
+ * 根据指定的学生姓名列表在文本中查找并提取每个学生的内容
+ * 用于手动指定学生姓名的场景
+ */
+function findStudentByName(text: string, name: string): { name: string; index: number } | null {
+  // 查找【姓名】格式
+  const bracketPattern = new RegExp(`【${name}】`, 'g');
+  const bracketMatch = bracketPattern.exec(text);
+  if (bracketMatch) {
+    return { name, index: bracketMatch.index };
+  }
+  
+  // 查找独占一行的姓名
+  const linePattern = new RegExp(`^${name}\\s*$`, 'gm');
+  const lineMatch = linePattern.exec(text);
+  if (lineMatch) {
+    return { name, index: lineMatch.index };
+  }
+  
+  return null;
+}
+
+/**
+ * 使用手动指定的学生姓名列表解析小班课反馈
+ * @param text 反馈文本
+ * @param manualNames 手动指定的学生姓名列表
+ */
+export function extractClassModulesWithManualNames(
+  text: string, 
+  manualNames: string[]
+): ClassModulesResult {
+  const result: ClassModulesResult = {
+    common: {
+      content: '',
+      assignment: ''
+    },
+    students: []
+  };
+  
+  // 1. 提取全班共用部分（与自动模式相同）
+  const contentEndMarkers = ['课堂笔记', '生词', '长难句讲解', '作业布置', '随堂测试', '作业批改'];
+  result.common.content = extractSection(text, '授课内容', contentEndMarkers);
+  
+  const assignmentEndMarkers = ['课堂笔记', '生词', '长难句讲解', '附当堂讲解错题合集', 'OK'];
+  result.common.assignment = extractSection(text, '作业布置', assignmentEndMarkers);
+  
+  // 2. 按手动指定的姓名顺序查找每个学生
+  const studentPositions: Array<{ name: string; index: number }> = [];
+  
+  for (const name of manualNames) {
+    const cleanName = name.trim();
+    if (!cleanName) continue;
+    
+    const found = findStudentByName(text, cleanName);
+    if (found) {
+      studentPositions.push(found);
+    } else {
+      // 即使找不到，也添加一个空的学生记录
+      studentPositions.push({ name: cleanName, index: -1 });
+    }
+  }
+  
+  // 3. 按在文本中的位置排序（用于确定内容范围）
+  const sortedPositions = studentPositions
+    .filter(s => s.index !== -1)
+    .sort((a, b) => a.index - b.index);
+  
+  // 4. 提取每个学生的内容
+  for (const student of studentPositions) {
+    if (student.index === -1) {
+      // 找不到该学生，返回空内容
+      result.students.push({
+        name: student.name,
+        homework: '',
+        test: '',
+        feedback: ''
+      });
+      continue;
+    }
+    
+    // 确定学生内容的范围
+    const startIndex = student.index;
+    let endIndex = text.length;
+    
+    // 查找下一个学生的位置
+    const currentSortedIndex = sortedPositions.findIndex(s => s.name === student.name);
+    if (currentSortedIndex !== -1 && currentSortedIndex < sortedPositions.length - 1) {
+      endIndex = sortedPositions[currentSortedIndex + 1].index;
+    } else {
+      // 最后一个学生，查找【OK】或 OK 作为结束
+      const okMatch = text.slice(startIndex).match(/【OK】|^OK$/m);
+      if (okMatch && okMatch.index !== undefined) {
+        endIndex = startIndex + okMatch.index;
+      }
+    }
+    
+    const studentText = text.slice(startIndex, endIndex);
+    const modules = extractStudentModules(studentText);
+    
+    result.students.push({
+      name: student.name,
+      ...modules
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * 解析用户输入的姓名字符串，返回姓名列表
+ * 支持逗号、顿号、换行分隔
+ */
+export function parseManualNames(input: string): string[] {
+  if (!input.trim()) return [];
+  
+  // 支持多种分隔符：逗号、顿号、换行
+  const names = input.split(/[,，、\n]+/);
+  
+  return names
+    .map(name => name.trim())
+    .filter(name => name.length > 0);
+}

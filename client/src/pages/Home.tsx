@@ -9,15 +9,26 @@
  * - 复制后按钮变勾，持久显示直到重新拆分或清空
  * - 响应式设计：适配手机、iPad、桌面
  * - 切换模式时各自内容独立保存
+ * - 小班课模式支持手动指定学生姓名
  */
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { extractModules, MODULE_CONFIG, type ExtractedModules } from "@/lib/extractModules";
-import { extractClassModules, COMMON_MODULE_CONFIG, STUDENT_MODULE_CONFIG, type ClassModulesResult, type StudentData } from "@/lib/extractClassModules";
-import { Scissors, FileText, Copy, Check, User, Users, BookOpen, ClipboardList } from "lucide-react";
+import { 
+  extractClassModules, 
+  extractClassModulesWithManualNames,
+  parseManualNames,
+  COMMON_MODULE_CONFIG, 
+  STUDENT_MODULE_CONFIG, 
+  type ClassModulesResult, 
+  type StudentData 
+} from "@/lib/extractClassModules";
+import { Scissors, FileText, Copy, Check, User, Users, BookOpen, ClipboardList, UserPlus } from "lucide-react";
 
 type Mode = "oneToOne" | "smallClass";
 
@@ -33,6 +44,8 @@ interface SmallClassState {
   inputText: string;
   results: ClassModulesResult | null;
   copiedModules: Record<string, boolean>; // 格式: "common_content", "student_0_homework" 等
+  manualMode: boolean; // 是否手动输入学生姓名
+  manualNames: string; // 手动输入的学生姓名
 }
 
 export default function Home() {
@@ -50,7 +63,9 @@ export default function Home() {
   const [smallClassState, setSmallClassState] = useState<SmallClassState>({
     inputText: "",
     results: null,
-    copiedModules: {}
+    copiedModules: {},
+    manualMode: false,
+    manualNames: ""
   });
 
   // 1对1模式的操作函数
@@ -101,7 +116,18 @@ export default function Home() {
     if (!smallClassState.inputText.trim()) {
       return;
     }
-    const extracted = extractClassModules(smallClassState.inputText);
+    
+    let extracted: ClassModulesResult;
+    
+    if (smallClassState.manualMode && smallClassState.manualNames.trim()) {
+      // 手动模式：使用用户指定的姓名列表
+      const names = parseManualNames(smallClassState.manualNames);
+      extracted = extractClassModulesWithManualNames(smallClassState.inputText, names);
+    } else {
+      // 自动模式：自动识别学生姓名
+      extracted = extractClassModules(smallClassState.inputText);
+    }
+    
     setSmallClassState(prev => ({
       ...prev,
       results: extracted,
@@ -113,7 +139,9 @@ export default function Home() {
     setSmallClassState({
       inputText: "",
       results: null,
-      copiedModules: {}
+      copiedModules: {},
+      manualMode: false,
+      manualNames: ""
     });
   };
 
@@ -279,6 +307,40 @@ export default function Home() {
               onChange={(e) => setSmallClassState(prev => ({ ...prev, inputText: e.target.value }))}
               className="resize-none text-base sm:text-sm leading-relaxed w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
             />
+            
+            {/* 手动输入学生姓名选项 */}
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="manual-mode"
+                  checked={smallClassState.manualMode}
+                  onCheckedChange={(checked) => 
+                    setSmallClassState(prev => ({ 
+                      ...prev, 
+                      manualMode: checked === true 
+                    }))
+                  }
+                />
+                <label 
+                  htmlFor="manual-mode" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4 text-muted-foreground" />
+                  手动输入学生姓名
+                </label>
+              </div>
+              
+              {/* 手动输入姓名的输入框 */}
+              {smallClassState.manualMode && (
+                <Input
+                  placeholder="输入学生姓名，用逗号分隔，如：李亦然, 张安菲, 王小明"
+                  value={smallClassState.manualNames}
+                  onChange={(e) => setSmallClassState(prev => ({ ...prev, manualNames: e.target.value }))}
+                  className="text-base sm:text-sm h-11 sm:h-10"
+                />
+              )}
+            </div>
+            
             <div className="flex gap-2 sm:gap-3">
               <Button 
                 onClick={handleSmallClassSplit} 
@@ -392,7 +454,7 @@ export default function Home() {
                   <Users className="w-10 h-10 mx-auto text-muted-foreground/50" />
                   <p className="text-muted-foreground text-sm">
                     {smallClassState.inputText.trim() 
-                      ? "未识别到学生信息，请检查反馈文本格式"
+                      ? "未识别到学生信息，请检查反馈文本格式或尝试手动输入学生姓名"
                       : "等待拆分..."}
                   </p>
                 </div>
@@ -415,64 +477,76 @@ export default function Home() {
     studentIndex: number; 
     copiedModules: Record<string, boolean>;
     onCopy: (key: string, content: string) => void;
-  }) => (
-    <Card className="shadow-sm border-l-4 border-l-primary/60">
-      <CardHeader className="pb-3 px-4 sm:px-6 bg-muted/20">
-        <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary text-primary-foreground text-sm sm:text-base font-bold flex items-center justify-center flex-shrink-0">
-            {studentIndex + 1}
-          </div>
-          <span>{student.name}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 px-4 sm:px-6 pt-4">
-        {STUDENT_MODULE_CONFIG.map((module) => {
-          const content = student[module.key as keyof Omit<StudentData, 'name'>] || "";
-          const copyKey = `student_${studentIndex}_${module.key}`;
-          const isCopied = copiedModules[copyKey] || false;
-          
-          return (
-            <div key={module.key} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm sm:text-base font-medium text-foreground">
-                  {module.label}
-                </h4>
-                <Button
-                  variant={isCopied ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => onCopy(copyKey, content)}
-                  disabled={!content}
-                  className={`h-8 sm:h-7 px-2.5 text-xs sm:text-sm ${
-                    isCopied 
-                      ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
-                      : ""
-                  }`}
-                >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 mr-1" />
-                      已复制
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 mr-1" />
-                      复制
-                    </>
-                  )}
-                </Button>
-              </div>
-              <Textarea
-                value={content}
-                readOnly
-                placeholder="（无内容）"
-                className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
-              />
+  }) => {
+    // 检查该学生是否有任何内容
+    const hasContent = student.homework || student.test || student.feedback;
+    
+    return (
+      <Card className={`shadow-sm border-l-4 ${hasContent ? 'border-l-primary/60' : 'border-l-muted-foreground/30'}`}>
+        <CardHeader className="pb-3 px-4 sm:px-6 bg-muted/20">
+          <CardTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+            <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full text-sm sm:text-base font-bold flex items-center justify-center flex-shrink-0 ${
+              hasContent 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-muted-foreground/30 text-muted-foreground'
+            }`}>
+              {studentIndex + 1}
             </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
+            <span className={hasContent ? '' : 'text-muted-foreground'}>{student.name}</span>
+            {!hasContent && (
+              <span className="text-xs font-normal text-muted-foreground ml-2">（未找到该学生）</span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 px-4 sm:px-6 pt-4">
+          {STUDENT_MODULE_CONFIG.map((module) => {
+            const content = student[module.key as keyof Omit<StudentData, 'name'>] || "";
+            const copyKey = `student_${studentIndex}_${module.key}`;
+            const isCopied = copiedModules[copyKey] || false;
+            
+            return (
+              <div key={module.key} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm sm:text-base font-medium text-foreground">
+                    {module.label}
+                  </h4>
+                  <Button
+                    variant={isCopied ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => onCopy(copyKey, content)}
+                    disabled={!content}
+                    className={`h-8 sm:h-7 px-2.5 text-xs sm:text-sm ${
+                      isCopied 
+                        ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                        : ""
+                    }`}
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 mr-1" />
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 mr-1" />
+                        复制
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <Textarea
+                  value={content}
+                  readOnly
+                  placeholder="（无内容）"
+                  className="resize-none text-base sm:text-sm leading-relaxed bg-muted/30 w-full h-[8rem] sm:h-[7.5rem] overflow-y-auto"
+                />
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
