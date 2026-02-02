@@ -8,8 +8,10 @@ function Textarea({
   onKeyDown,
   onCompositionStart,
   onCompositionEnd,
+  onChange,
   ...props
 }: React.ComponentProps<"textarea">) {
+  const composingRef = React.useRef(false);
   // Get dialog composition context if available (will be no-op if not inside Dialog)
   const dialogComposition = useDialogComposition();
 
@@ -34,10 +36,12 @@ function Textarea({
       onKeyDown?.(e);
     },
     onCompositionStart: e => {
+      composingRef.current = true;
       dialogComposition.setComposing(true);
       onCompositionStart?.(e);
     },
     onCompositionEnd: e => {
+      composingRef.current = false;
       // Mark that composition just ended - this helps handle the Enter key that confirms input
       dialogComposition.markCompositionEnd();
       // Delay setting composing to false to handle Safari's event order
@@ -46,8 +50,21 @@ function Textarea({
         dialogComposition.setComposing(false);
       }, 100);
       onCompositionEnd?.(e);
+      // After composition ends, manually sync the final value to React state
+      if (onChange) {
+        const target = e.target as HTMLTextAreaElement;
+        onChange({ target, currentTarget: target } as React.ChangeEvent<HTMLTextAreaElement>);
+      }
     },
   });
+
+  // Skip onChange during composition to prevent React re-renders from breaking IME
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (composingRef.current) {
+      return;
+    }
+    onChange?.(e);
+  };
 
   return (
     <textarea
@@ -59,6 +76,7 @@ function Textarea({
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
       onKeyDown={handleKeyDown}
+      onChange={handleChange}
       {...props}
     />
   );
