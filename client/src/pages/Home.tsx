@@ -565,10 +565,10 @@ export default function Home() {
       {/* Main Content - 移动端优化间距 */}
       <main className="container py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* 模式切换 Tab */}
-        <ModeTab />
+        {ModeTab()}
 
         {/* 根据模式显示不同界面 */}
-        {mode === "oneToOne" ? <OneToOneView /> : <SmallClassView />}
+        {mode === "oneToOne" ? OneToOneView() : SmallClassView()}
       </main>
 
       {/* 底部安全区域 - 适配 iPhone 刘海屏 */}
