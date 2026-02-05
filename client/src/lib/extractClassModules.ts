@@ -228,9 +228,9 @@ function extractStudentSection(text: string, marker: string, endMarkers: string[
   const contentStart = startIndex + matchLength;
   let endIndex = text.length;
   
-  // 查找最近的结束标记
+  // 查找最近的结束标记（只匹配行首的段落标题，不匹配正文中间的文字）
   for (const endMarker of endMarkers) {
-    const pattern = new RegExp(`${endMarker}[：:]?`, 'g');
+    const pattern = new RegExp(`^${endMarker}[：:]?`, 'gm');
     pattern.lastIndex = contentStart;
     const match = pattern.exec(text);
     if (match && match.index < endIndex) {
